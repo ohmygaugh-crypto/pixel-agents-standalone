@@ -1,0 +1,21 @@
+# Static deploy of the Vite PWA build (server bundle is built but not run on Netlify).
+# HTTPS is automatic — required for install prompts and service workers.
+
+[build]
+  # Root and webview-ui each have their own lockfile; both must install for vite build + PWA.
+  command = "npm ci && npm ci --prefix webview-ui && npm run build"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Precache updates: avoid stale SW entrypoints. (Also declared in webview-ui/public/_headers.)
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/workbox-*.js"
+  [headers.values]
+    Cache-Control = "no-cache"
