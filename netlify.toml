@@ -1,0 +1,12 @@
+# Static deploy of the Vite PWA bundle (see webview-ui/vite.config.ts → outDir ../dist/public).
+# Full app with Node server is `npm start` on your machine; Netlify serves the installable shell only.
+
+[build]
+  command = "npm run build"
+  publish = "dist/public"
+
+# Service worker must not be long-cached or updates never reach clients after deploy.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
