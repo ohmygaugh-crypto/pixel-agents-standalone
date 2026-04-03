@@ -1,0 +1,15 @@
+# Full-stack app builds to dist/: Node server at dist/server.js, static PWA at dist/public/.
+# Netlify hosts the static shell only (HTTPS + install prompt). Use npm run start or another host for the API/WebSocket.
+[build]
+  command = "npm ci && npm ci --prefix webview-ui && npm run build"
+  publish = "dist/public"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/workbox-*.js"
+  [headers.values]
+    Cache-Control = "no-cache"
