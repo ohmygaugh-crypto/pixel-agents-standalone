@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { OfficeState } from './office/engine/officeState.js'
 import { OfficeCanvas } from './office/components/OfficeCanvas.js'
 import { ToolOverlay } from './office/components/ToolOverlay.js'
@@ -14,6 +14,8 @@ import { useEditorKeyboard } from './hooks/useEditorKeyboard.js'
 import { ZoomControls } from './components/ZoomControls.js'
 import { BottomToolbar } from './components/BottomToolbar.js'
 import { DebugView } from './components/DebugView.js'
+import { SceneManager } from './scenes/SceneManager.js'
+import type { SceneId, SharedSceneState } from './scenes/types.js'
 
 // Game state lives outside React — updated imperatively by message handlers
 const officeStateRef = { current: null as OfficeState | null }
@@ -124,8 +126,13 @@ function App() {
   const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
+  const [activeScene, setActiveScene] = useState<SceneId>('cafe')
 
   const handleToggleDebugMode = useCallback(() => setIsDebugMode((prev) => !prev), [])
+  const handleSceneChange = useCallback((scene: SceneId) => {
+    if (editor.isEditMode && scene !== 'cafe') return
+    setActiveScene(scene)
+  }, [editor.isEditMode])
 
   const handleSelectAgent = useCallback((id: number) => {
     vscode.postMessage({ type: 'focusAgent', id })
@@ -159,6 +166,14 @@ function App() {
   }, [])
 
   const officeState = getOfficeState()
+  const sharedSceneState = useMemo<SharedSceneState>(
+    () => ({
+      officeState,
+      editorState,
+      workspaceFolders,
+    }),
+    [officeState, workspaceFolders],
+  )
 
   // Force dependency on editorTickForKeyboard to propagate keyboard-triggered re-renders
   void editorTickForKeyboard
@@ -193,119 +208,128 @@ function App() {
         .pixel-agents-pulse { animation: pixel-agents-pulse ${PULSE_ANIMATION_DURATION_SEC}s ease-in-out infinite; }
       `}</style>
 
-      <OfficeCanvas
-        officeState={officeState}
-        onClick={handleClick}
-        isEditMode={editor.isEditMode}
-        editorState={editorState}
-        onEditorTileAction={editor.handleEditorTileAction}
-        onEditorEraseAction={editor.handleEditorEraseAction}
-        onEditorSelectionChange={editor.handleEditorSelectionChange}
-        onDeleteSelected={editor.handleDeleteSelected}
-        onRotateSelected={editor.handleRotateSelected}
-        onDragMove={editor.handleDragMove}
-        editorTick={editor.editorTick}
-        zoom={editor.zoom}
-        onZoomChange={editor.handleZoomChange}
-        panRef={editor.panRef}
+      <SceneManager
+        activeScene={activeScene}
+        onRequestSceneChange={handleSceneChange}
+        sharedState={sharedSceneState}
+        cafeScene={
+          <>
+            <OfficeCanvas
+              officeState={officeState}
+              onClick={handleClick}
+              isEditMode={editor.isEditMode}
+              editorState={editorState}
+              onEditorTileAction={editor.handleEditorTileAction}
+              onEditorEraseAction={editor.handleEditorEraseAction}
+              onEditorSelectionChange={editor.handleEditorSelectionChange}
+              onDeleteSelected={editor.handleDeleteSelected}
+              onRotateSelected={editor.handleRotateSelected}
+              onDragMove={editor.handleDragMove}
+              editorTick={editor.editorTick}
+              zoom={editor.zoom}
+              onZoomChange={editor.handleZoomChange}
+              panRef={editor.panRef}
+            />
+
+            <ZoomControls zoom={editor.zoom} onZoomChange={editor.handleZoomChange} />
+
+            {/* Vignette overlay */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'var(--pixel-vignette)',
+                pointerEvents: 'none',
+                zIndex: 40,
+              }}
+            />
+
+            <BottomToolbar
+              isEditMode={editor.isEditMode}
+              onOpenClaude={editor.handleOpenClaude}
+              onToggleEditMode={editor.handleToggleEditMode}
+              isDebugMode={isDebugMode}
+              onToggleDebugMode={handleToggleDebugMode}
+              workspaceFolders={workspaceFolders}
+            />
+
+            {editor.isEditMode && editor.isDirty && (
+              <EditActionBar editor={editor} editorState={editorState} />
+            )}
+
+            {showRotateHint && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: '50%',
+                  transform: editor.isDirty ? 'translateX(calc(-50% + 100px))' : 'translateX(-50%)',
+                  zIndex: 49,
+                  background: 'var(--pixel-hint-bg)',
+                  color: '#fff',
+                  fontSize: '20px',
+                  padding: '3px 8px',
+                  borderRadius: 0,
+                  border: '2px solid var(--pixel-accent)',
+                  boxShadow: 'var(--pixel-shadow)',
+                  pointerEvents: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Press <b>R</b> to rotate
+              </div>
+            )}
+
+            {editor.isEditMode && (() => {
+              // Compute selected furniture color from current layout
+              const selUid = editorState.selectedFurnitureUid
+              const selColor = selUid
+                ? officeState.getLayout().furniture.find((f) => f.uid === selUid)?.color ?? null
+                : null
+              return (
+                <EditorToolbar
+                  activeTool={editorState.activeTool}
+                  selectedTileType={editorState.selectedTileType}
+                  selectedFurnitureType={editorState.selectedFurnitureType}
+                  selectedFurnitureUid={selUid}
+                  selectedFurnitureColor={selColor}
+                  floorColor={editorState.floorColor}
+                  wallColor={editorState.wallColor}
+                  onToolChange={editor.handleToolChange}
+                  onTileTypeChange={editor.handleTileTypeChange}
+                  onFloorColorChange={editor.handleFloorColorChange}
+                  onWallColorChange={editor.handleWallColorChange}
+                  onSelectedFurnitureColorChange={editor.handleSelectedFurnitureColorChange}
+                  onFurnitureTypeChange={editor.handleFurnitureTypeChange}
+                  loadedAssets={loadedAssets}
+                />
+              )
+            })()}
+
+            <ToolOverlay
+              officeState={officeState}
+              agents={agents}
+              agentTools={agentTools}
+              subagentCharacters={subagentCharacters}
+              containerRef={containerRef}
+              zoom={editor.zoom}
+              panRef={editor.panRef}
+              onCloseAgent={handleCloseAgent}
+            />
+
+            {isDebugMode && (
+              <DebugView
+                agents={agents}
+                selectedAgent={selectedAgent}
+                agentTools={agentTools}
+                agentStatuses={agentStatuses}
+                subagentTools={subagentTools}
+                onSelectAgent={handleSelectAgent}
+              />
+            )}
+          </>
+        }
       />
-
-      <ZoomControls zoom={editor.zoom} onZoomChange={editor.handleZoomChange} />
-
-      {/* Vignette overlay */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'var(--pixel-vignette)',
-          pointerEvents: 'none',
-          zIndex: 40,
-        }}
-      />
-
-      <BottomToolbar
-        isEditMode={editor.isEditMode}
-        onOpenClaude={editor.handleOpenClaude}
-        onToggleEditMode={editor.handleToggleEditMode}
-        isDebugMode={isDebugMode}
-        onToggleDebugMode={handleToggleDebugMode}
-        workspaceFolders={workspaceFolders}
-      />
-
-      {editor.isEditMode && editor.isDirty && (
-        <EditActionBar editor={editor} editorState={editorState} />
-      )}
-
-      {showRotateHint && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: '50%',
-            transform: editor.isDirty ? 'translateX(calc(-50% + 100px))' : 'translateX(-50%)',
-            zIndex: 49,
-            background: 'var(--pixel-hint-bg)',
-            color: '#fff',
-            fontSize: '20px',
-            padding: '3px 8px',
-            borderRadius: 0,
-            border: '2px solid var(--pixel-accent)',
-            boxShadow: 'var(--pixel-shadow)',
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Press <b>R</b> to rotate
-        </div>
-      )}
-
-      {editor.isEditMode && (() => {
-        // Compute selected furniture color from current layout
-        const selUid = editorState.selectedFurnitureUid
-        const selColor = selUid
-          ? officeState.getLayout().furniture.find((f) => f.uid === selUid)?.color ?? null
-          : null
-        return (
-          <EditorToolbar
-            activeTool={editorState.activeTool}
-            selectedTileType={editorState.selectedTileType}
-            selectedFurnitureType={editorState.selectedFurnitureType}
-            selectedFurnitureUid={selUid}
-            selectedFurnitureColor={selColor}
-            floorColor={editorState.floorColor}
-            wallColor={editorState.wallColor}
-            onToolChange={editor.handleToolChange}
-            onTileTypeChange={editor.handleTileTypeChange}
-            onFloorColorChange={editor.handleFloorColorChange}
-            onWallColorChange={editor.handleWallColorChange}
-            onSelectedFurnitureColorChange={editor.handleSelectedFurnitureColorChange}
-            onFurnitureTypeChange={editor.handleFurnitureTypeChange}
-            loadedAssets={loadedAssets}
-          />
-        )
-      })()}
-
-      <ToolOverlay
-        officeState={officeState}
-        agents={agents}
-        agentTools={agentTools}
-        subagentCharacters={subagentCharacters}
-        containerRef={containerRef}
-        zoom={editor.zoom}
-        panRef={editor.panRef}
-        onCloseAgent={handleCloseAgent}
-      />
-
-      {isDebugMode && (
-        <DebugView
-          agents={agents}
-          selectedAgent={selectedAgent}
-          agentTools={agentTools}
-          agentStatuses={agentStatuses}
-          subagentTools={subagentTools}
-          onSelectAgent={handleSelectAgent}
-        />
-      )}
     </div>
   )
 }
