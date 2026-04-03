@@ -1,0 +1,18 @@
+# Full-stack build: Node server bundle + Vite PWA in dist/public.
+# Netlify serves the static shell; install prompt needs HTTPS (default on Netlify).
+[build]
+  command = "npm run build"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/workbox-*.js"
+  [headers.values]
+    Cache-Control = "no-cache"
