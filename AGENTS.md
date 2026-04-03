@@ -4,7 +4,7 @@
 
 ### Project overview
 
-Pixel Agents Standalone is a Node.js/TypeScript web app with two sub-packages:
+Cyber Cafe is a Node.js/TypeScript web app with two sub-packages:
 - **Backend** (`server/`) — Express + WebSocket server on port 3456. Watches `~/.claude/projects/` for Claude Code JSONL session files.
 - **Frontend** (`webview-ui/`) — React 19 + Vite 7 SPA with a Canvas 2D pixel art game engine.
 
@@ -12,14 +12,14 @@ No databases, Docker, or external APIs required. State is ephemeral/in-memory wi
 
 ### Running in development
 
-The `npm run dev` script (using `concurrently`) has a known issue: the `dev:ui` sub-command runs `cd webview-ui && vite` which fails with `vite: not found` because `vite` lives in `webview-ui/node_modules/.bin/`, not on the global PATH. **Workaround — start the two servers separately:**
+The `npm run dev` script (using `concurrently`) has a known issue: the `dev:ui` sub-command runs `cd webview-ui && vite` which may fail in some cloud shells if local bins are not on PATH. **Workaround — start the two servers separately:**
 
 ```bash
 # Terminal 1: Backend (hot-reload via tsx watch)
 cd /workspace && npx tsx watch server/index.ts
 
 # Terminal 2: Vite dev server (HMR)
-cd /workspace/webview-ui && npx vite
+cd /workspace/webview-ui && pnpm vite
 ```
 
 - Backend: http://localhost:3456 (Express + WebSocket)
@@ -36,7 +36,7 @@ npm start            # serves bundled app at http://localhost:3456
 
 ESLint is configured only in `webview-ui/`:
 ```bash
-cd webview-ui && npm run lint
+cd webview-ui && pnpm run lint
 ```
 Note: there are pre-existing lint errors (react-hooks/refs violations in several components). These are not regressions.
 
@@ -44,7 +44,7 @@ Note: there are pre-existing lint errors (react-hooks/refs violations in several
 
 ```bash
 cd /workspace && npx tsc --noEmit          # server types
-cd /workspace/webview-ui && npx tsc -b     # frontend types
+cd /workspace/webview-ui && pnpm tsc -b    # frontend types
 ```
 
 ### Key directories
@@ -55,4 +55,12 @@ cd /workspace/webview-ui && npx tsc -b     # frontend types
 
 ### Dependencies
 
-Two separate `npm install` runs are needed — root and `webview-ui/`. Both use `package-lock.json` (npm).
+Use separate installs for root and frontend:
+
+```bash
+cd /workspace && npm install
+cd /workspace/webview-ui && pnpm install
+```
+
+- Root currently uses npm lockfiles/scripts.
+- Frontend (`webview-ui/`) is pnpm-managed (`pnpm-lock.yaml`).

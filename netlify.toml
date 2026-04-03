@@ -1,0 +1,21 @@
+[build]
+command = "corepack enable && cd webview-ui && pnpm install --frozen-lockfile && pnpm run build"
+publish = "webview-ui/../dist/public"
+
+[build.environment]
+NODE_VERSION = "22"
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+
+[[headers]]
+for = "/sw.js"
+  [headers.values]
+  Cache-Control = "no-cache"
+
+[[headers]]
+for = "/workbox-*.js"
+  [headers.values]
+  Cache-Control = "no-cache"
