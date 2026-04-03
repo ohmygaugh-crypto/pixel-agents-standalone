@@ -1,6 +1,6 @@
 [build]
-command = "corepack enable && cd webview-ui && pnpm install --frozen-lockfile && pnpm run build"
-publish = "webview-ui/../dist/public"
+command = "corepack enable && npm ci && npm run generate:pwa-icons && cd webview-ui && pnpm install --frozen-lockfile && pnpm run build"
+publish = "dist/public"
 
 [build.environment]
 NODE_VERSION = "22"
