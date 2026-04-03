@@ -9,6 +9,7 @@ import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
+import { isRealtimeEnabled } from '../wsApi.js'
 
 export interface SubagentCharacter {
   id: number
@@ -66,6 +67,7 @@ export function useExtensionMessages(
   onLayoutLoaded?: (layout: OfficeLayout) => void,
   isEditDirty?: () => boolean,
 ): ExtensionMessageState {
+  const realtimeEnabled = isRealtimeEnabled()
   const [agents, setAgents] = useState<number[]>([])
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null)
   const [agentTools, setAgentTools] = useState<Record<number, ToolActivity[]>>({})
@@ -80,6 +82,14 @@ export function useExtensionMessages(
   const layoutReadyRef = useRef(false)
 
   useEffect(() => {
+    if (!realtimeEnabled) {
+      const os = getOfficeState()
+      onLayoutLoaded?.(os.getLayout())
+      layoutReadyRef.current = true
+      setLayoutReady(true)
+      return
+    }
+
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; folderName?: string }> = []
 
@@ -358,7 +368,7 @@ export function useExtensionMessages(
     window.addEventListener('message', handler)
     vscode.postMessage({ type: 'webviewReady' })
     return () => window.removeEventListener('message', handler)
-  }, [getOfficeState])
+  }, [getOfficeState, onLayoutLoaded, isEditDirty, realtimeEnabled])
 
   return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders }
 }

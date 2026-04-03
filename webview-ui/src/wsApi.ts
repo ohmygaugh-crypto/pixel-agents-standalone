@@ -1,9 +1,13 @@
 // WebSocket API — replaces VS Code postMessage bridge.
-// Allows portable host deployments (Netlify + external realtime) via env override.
-const WS_URL = resolveWsUrl();
+// In production, realtime is opt-in via VITE_REALTIME_WS_URL.
+const WS_URL = isRealtimeEnabled() ? resolveWsUrl() : null;
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function isRealtimeEnabled(): boolean {
+  return import.meta.env.DEV || Boolean(import.meta.env.VITE_REALTIME_WS_URL);
+}
 
 function resolveWsUrl(): string {
   const configured = import.meta.env.VITE_REALTIME_WS_URL as string | undefined;
@@ -19,7 +23,12 @@ function resolveWsUrl(): string {
   return `${protocol}//${window.location.host}`;
 }
 
-export function connectWebSocket(): void {
+export function connectWebSocket(): boolean {
+  if (!WS_URL) {
+    console.log("Realtime disabled: no websocket endpoint configured for this environment");
+    return false;
+  }
+
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
@@ -35,10 +44,13 @@ export function connectWebSocket(): void {
 
   ws.onclose = () => {
     console.log("Disconnected, reconnecting in 2s...");
-    reconnectTimer = setTimeout(connectWebSocket, 2000);
+    reconnectTimer = setTimeout(() => {
+      connectWebSocket();
+    }, 2000);
   };
 
   ws.onerror = () => ws?.close();
+  return true;
 }
 
 export function sendMessage(msg: unknown): void {

@@ -54,6 +54,8 @@ This runs the Node server and Vite dev server together.
 - `netlify.toml` is included for build/publish/SPA routing/PWA headers.
 - Frontend realtime endpoint can be overridden with:
   - `VITE_REALTIME_WS_URL`
+- Production default behavior (without `VITE_REALTIME_WS_URL`):
+  - app boots without websocket and renders the default local shell instead of hanging on "Loading..."
 - See `netlify-deployment.md` for full setup details.
 
 ## Architecture Snapshot

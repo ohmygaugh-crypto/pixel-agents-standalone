@@ -1,6 +1,6 @@
 [build]
 command = "corepack enable && cd webview-ui && pnpm install --frozen-lockfile && pnpm run build"
-publish = "webview-ui/../dist/public"
+publish = "dist/public"
 
 [build.environment]
 NODE_VERSION = "22"
