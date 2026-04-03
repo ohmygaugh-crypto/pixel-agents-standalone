@@ -1,10 +1,23 @@
-// WebSocket API — replaces VS Code postMessage bridge
-const WS_URL = import.meta.env.DEV
-  ? "ws://localhost:3456"
-  : `ws://${window.location.host}`;
+// WebSocket API — replaces VS Code postMessage bridge.
+// Allows portable host deployments (Netlify + external realtime) via env override.
+const WS_URL = resolveWsUrl();
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resolveWsUrl(): string {
+  const configured = import.meta.env.VITE_REALTIME_WS_URL as string | undefined;
+  if (configured) {
+    return configured;
+  }
+
+  if (import.meta.env.DEV) {
+    return "ws://localhost:3456";
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}`;
+}
 
 export function connectWebSocket(): void {
   ws = new WebSocket(WS_URL);

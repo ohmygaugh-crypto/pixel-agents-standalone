@@ -26,7 +26,7 @@ Open `http://localhost:3456` in your browser.
 - Service worker registration enabled via `virtual:pwa-register`
 - Offline-first static caching for sprite/image/font assets
 - App icons generated in `webview-ui/public/icons/`
-- Cloudflare Pages skeleton documented in `cloudflare-pages.md`
+- Netlify deploy skeleton documented in `netlify-deployment.md`
 
 ## Scene Foundation (Phase 0)
 
@@ -42,12 +42,26 @@ npm run dev
 
 This runs the Node server and Vite dev server together.
 
+### Cursor Cloud agent setup notes
+
+- Development environment setup guidance is tracked in `AGENTS.md`.
+- Preferred package managers in this repo:
+  - frontend: `pnpm` (`webview-ui/`)
+  - root/server scripts currently remain npm-based
+
+## Netlify deployment (Phase 1 host target)
+
+- `netlify.toml` is included for build/publish/SPA routing/PWA headers.
+- Frontend realtime endpoint can be overridden with:
+  - `VITE_REALTIME_WS_URL`
+- See `netlify-deployment.md` for full setup details.
+
 ## Architecture Snapshot
 
 - **Server** (`server/`): Express + WebSocket + transcript watcher.
 - **UI** (`webview-ui/`): React + Canvas simulation + layout editor.
 - **Scene layer** (`webview-ui/src/scenes/`): app-level scene manager for Café ↔ Street.
-- **Audit notes**: `docs/cyber-cafe-audit.md` contains extension points for Durable Objects and multi-tenancy migration.
+- **Audit notes**: `docs/cyber-cafe-audit.md` contains extension points for portable realtime + multi-tenancy migration.
 
 ## Auto-Launch with Claude Code
 
