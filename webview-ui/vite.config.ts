@@ -9,6 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['characters.png', 'Screenshot.jpg', 'icons/*.png'],
       manifest: {
+        id: '/',
         name: 'Cyber Cafe',
         short_name: 'Cyber Cafe',
         description: 'Where your AI agents code... and you chill in the neon glow.',
