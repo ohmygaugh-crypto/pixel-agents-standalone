@@ -1,0 +1,16 @@
+# Static PWA: Vite emits the installable shell to dist/public (see webview-ui/vite.config.ts).
+# Full-stack local use still uses `npm start` (Express serves the same folder).
+
+[build]
+  command = "npm run build"
+  publish = "dist/public"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/workbox-*.js"
+  [headers.values]
+    Cache-Control = "no-cache"
