@@ -79,9 +79,41 @@ export function useExtensionMessages(
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
 
+  /** When the UI is hosted without a realtime server (e.g. static Netlify), no `layoutLoaded` arrives — unblock after this delay. */
+  const OFFLINE_LAYOUT_FALLBACK_MS = 8000
+
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; folderName?: string }> = []
+    let offlineLayoutTimer: ReturnType<typeof setTimeout> | null = null
+
+    const clearOfflineTimer = () => {
+      if (offlineLayoutTimer !== null) {
+        clearTimeout(offlineLayoutTimer)
+        offlineLayoutTimer = null
+      }
+    }
+
+    const finalizeLayout = (rawLayout: OfficeLayout | null) => {
+      const os = getOfficeState()
+      const layout = rawLayout && rawLayout.version === 1 ? migrateLayoutColors(rawLayout) : null
+      if (layout) {
+        os.rebuildFromLayout(layout)
+        onLayoutLoaded?.(layout)
+      } else {
+        onLayoutLoaded?.(os.getLayout())
+      }
+      for (const p of pendingAgents) {
+        os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName)
+      }
+      pendingAgents = []
+      layoutReadyRef.current = true
+      setLayoutReady(true)
+      if (os.characters.size > 0) {
+        saveAgentSeats(os)
+      }
+      clearOfflineTimer()
+    }
 
     const handler = (e: MessageEvent) => {
       const msg = e.data
@@ -93,25 +125,7 @@ export function useExtensionMessages(
           console.log('[Webview] Skipping external layout update — editor has unsaved changes')
           return
         }
-        const rawLayout = msg.layout as OfficeLayout | null
-        const layout = rawLayout && rawLayout.version === 1 ? migrateLayoutColors(rawLayout) : null
-        if (layout) {
-          os.rebuildFromLayout(layout)
-          onLayoutLoaded?.(layout)
-        } else {
-          // Default layout — snapshot whatever OfficeState built
-          onLayoutLoaded?.(os.getLayout())
-        }
-        // Add buffered agents now that layout (and seats) are correct
-        for (const p of pendingAgents) {
-          os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName)
-        }
-        pendingAgents = []
-        layoutReadyRef.current = true
-        setLayoutReady(true)
-        if (os.characters.size > 0) {
-          saveAgentSeats(os)
-        }
+        finalizeLayout(msg.layout as OfficeLayout | null)
       } else if (msg.type === 'agentCreated') {
         const id = msg.id as number
         const folderName = msg.folderName as string | undefined
@@ -357,7 +371,16 @@ export function useExtensionMessages(
     }
     window.addEventListener('message', handler)
     vscode.postMessage({ type: 'webviewReady' })
-    return () => window.removeEventListener('message', handler)
+    offlineLayoutTimer = setTimeout(() => {
+      if (!layoutReadyRef.current) {
+        console.warn('[Webview] No layoutLoaded from server — showing default layout (static host or WebSocket unavailable)')
+        finalizeLayout(null)
+      }
+    }, OFFLINE_LAYOUT_FALLBACK_MS)
+    return () => {
+      clearOfflineTimer()
+      window.removeEventListener('message', handler)
+    }
   }, [getOfficeState])
 
   return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders }
