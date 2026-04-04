@@ -79,9 +79,20 @@ export function useExtensionMessages(
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
 
+  /** Netlify and other static hosts have no WS server at the same origin; without a layoutLoaded message the app stays on "Loading...". */
+  const STANDALONE_LAYOUT_FALLBACK_MS = 8000
+
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; folderName?: string }> = []
+
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+    const clearFallbackTimer = () => {
+      if (fallbackTimer !== undefined) {
+        clearTimeout(fallbackTimer)
+        fallbackTimer = undefined
+      }
+    }
 
     const handler = (e: MessageEvent) => {
       const msg = e.data
@@ -93,6 +104,7 @@ export function useExtensionMessages(
           console.log('[Webview] Skipping external layout update — editor has unsaved changes')
           return
         }
+        clearFallbackTimer()
         const rawLayout = msg.layout as OfficeLayout | null
         const layout = rawLayout && rawLayout.version === 1 ? migrateLayoutColors(rawLayout) : null
         if (layout) {
@@ -355,9 +367,29 @@ export function useExtensionMessages(
         }
       }
     }
+
+    const applyStandaloneFallback = () => {
+      if (layoutReadyRef.current) return
+      console.warn(
+        '[Webview] No layout from host after timeout — using default layout (static host or offline). Set VITE_REALTIME_WS_URL for live agents.',
+      )
+      handler(new MessageEvent('message', { data: { type: 'settingsLoaded', soundEnabled: false } }))
+      handler(
+        new MessageEvent('message', {
+          data: { type: 'existingAgents', agents: [], folderNames: {}, agentMeta: {} },
+        }),
+      )
+      handler(new MessageEvent('message', { data: { type: 'layoutLoaded', layout: null, version: 0 } }))
+    }
+
     window.addEventListener('message', handler)
     vscode.postMessage({ type: 'webviewReady' })
-    return () => window.removeEventListener('message', handler)
+    fallbackTimer = window.setTimeout(applyStandaloneFallback, STANDALONE_LAYOUT_FALLBACK_MS)
+
+    return () => {
+      clearFallbackTimer()
+      window.removeEventListener('message', handler)
+    }
   }, [getOfficeState])
 
   return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders }
