@@ -357,7 +357,20 @@ export function useExtensionMessages(
     }
     window.addEventListener('message', handler)
     vscode.postMessage({ type: 'webviewReady' })
-    return () => window.removeEventListener('message', handler)
+
+    // Static hosts (e.g. Netlify without a collocated WS server) never receive layoutLoaded;
+    // after a short wait, fall back so the UI is usable offline / demo mode.
+    const fallbackTimer = window.setTimeout(() => {
+      if (layoutReadyRef.current) return
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { type: 'layoutLoaded', layout: null, version: 0 } }),
+      )
+    }, 5000)
+
+    return () => {
+      window.clearTimeout(fallbackTimer)
+      window.removeEventListener('message', handler)
+    }
   }, [getOfficeState])
 
   return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders }

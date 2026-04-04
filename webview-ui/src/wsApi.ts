@@ -4,6 +4,8 @@ const WS_URL = resolveWsUrl();
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+/** Outbound messages before the socket is OPEN (avoids dropping webviewReady). */
+const pendingSends: string[] = [];
 
 function resolveWsUrl(): string {
   const configured = import.meta.env.VITE_REALTIME_WS_URL as string | undefined;
@@ -19,12 +21,20 @@ function resolveWsUrl(): string {
   return `${protocol}//${window.location.host}`;
 }
 
+function flushPendingSends(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  while (pendingSends.length > 0) {
+    const raw = pendingSends.shift();
+    if (raw !== undefined) ws.send(raw);
+  }
+}
+
 export function connectWebSocket(): void {
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
     console.log("Connected to pixel-agents server");
-    ws?.send(JSON.stringify({ type: "webviewReady" }));
+    flushPendingSends();
   };
 
   ws.onmessage = (event) => {
@@ -42,8 +52,11 @@ export function connectWebSocket(): void {
 }
 
 export function sendMessage(msg: unknown): void {
+  const raw = JSON.stringify(msg);
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
+    ws.send(raw);
+  } else {
+    pendingSends.push(raw);
   }
 }
 
