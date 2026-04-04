@@ -79,6 +79,25 @@ export function useExtensionMessages(
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
 
+  // Static hosts (e.g. Netlify) have no WS server at the same origin, so `layoutLoaded`
+  // never arrives and the app would spin forever. After a short wait, bootstrap with the
+  // same null-layout path the Node server uses (see server/index.ts sendInitialData).
+  useEffect(() => {
+    const ms = 5000
+    const t = window.setTimeout(() => {
+      if (layoutReadyRef.current) return
+      console.warn(
+        '[Webview] No layoutLoaded from host after',
+        ms,
+        'ms — using local default (set VITE_REALTIME_WS_URL if you run a realtime backend).',
+      )
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { type: 'layoutLoaded', layout: null, version: 0 } }),
+      )
+    }, ms)
+    return () => window.clearTimeout(t)
+  }, [])
+
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; folderName?: string }> = []
