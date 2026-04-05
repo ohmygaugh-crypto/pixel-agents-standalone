@@ -1,0 +1,47 @@
+name: Open promotion PR
+
+# Manual gate between environments: feature branches → dev → stage → main (production).
+# Run this from the Actions tab after CI is green on the source branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: Which promotion to open as a pull request
+        required: true
+        type: choice
+        options:
+          - dev-to-stage
+          - stage-to-main
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create promotion PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          case "${{ inputs.promote }}" in
+            dev-to-stage)
+              gh pr create --base stage --head dev \
+                --title "Promote dev → stage" \
+                --body "Automated promotion PR. Merge after CI passes on \`stage\`."
+              ;;
+            stage-to-main)
+              gh pr create --base main --head stage \
+                --title "Promote stage → main (production)" \
+                --body "Automated promotion PR. Merge after CI passes on \`main\`."
+              ;;
+            *)
+              echo "Unknown promote option"; exit 1
+              ;;
+          esac

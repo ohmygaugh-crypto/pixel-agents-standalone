@@ -1,0 +1,173 @@
+name: CI
+
+on:
+  push:
+    branches: [main, stage, dev]
+  pull_request:
+    branches: [main, stage, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-typecheck:
+    name: Build and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install UI dependencies
+        working-directory: webview-ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Server TypeScript
+        run: npx tsc --noEmit
+
+      - name: UI TypeScript
+        working-directory: webview-ui
+        run: pnpm exec tsc -b
+
+      - name: Production build
+        run: npm run build
+
+  smoke-qa:
+    name: Diff-scoped smoke QA
+    runs-on: ubuntu-latest
+    needs: build-and-typecheck
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install UI dependencies
+        working-directory: webview-ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Classify diff (Skyvern-style scope)
+        env:
+          QA_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          QA_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run qa:classify-diff
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Production build
+        run: npm run build
+
+      - name: Start server
+        run: |
+          node dist/server.js &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:3456/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "Server failed to become healthy"; exit 1
+
+      - name: Parse classification for smoke gates
+        id: scope
+        run: |
+          python3 << 'PY'
+          import json, os
+          with open("qa-classification.json") as f:
+              c = json.load(f)
+          out = os.environ["GITHUB_OUTPUT"]
+          with open(out, "a") as g:
+              g.write(f"needs_backend={'true' if c.get('needsBackendSmoke') else 'false'}\n")
+              g.write(f"needs_frontend={'true' if c.get('needsFrontendSmoke') else 'false'}\n")
+              g.write(f"classification={c.get('classification', 'Unknown')}\n")
+              g.write(f"docs_only={'true' if c.get('docsOnly') else 'false'}\n")
+          PY
+
+      - name: Smoke — /health
+        if: steps.scope.outputs.needs_backend == 'true'
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3456
+        run: npm run test:e2e:health
+
+      - name: Smoke — UI
+        if: steps.scope.outputs.needs_frontend == 'true'
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3456
+        run: npm run test:e2e:ui
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then kill "$SERVER_PID" 2>/dev/null || true; fi
+
+      - name: Comment PR with QA scope and results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          BUILD_JOB_RESULT: ${{ needs.build-and-typecheck.result }}
+          SMOKE_JOB_RESULT: ${{ job.status }}
+        with:
+          script: |
+            const fs = require('fs');
+            let report = {};
+            try {
+              report = JSON.parse(fs.readFileSync('qa-classification.json', 'utf8'));
+            } catch (e) {
+              report = { error: String(e) };
+            }
+            const cls = report.classification ?? '?';
+            const docs = report.docsOnly ? 'yes' : 'no';
+            const fe = report.needsFrontendSmoke ? 'yes' : 'no';
+            const be = report.needsBackendSmoke ? 'yes' : 'no';
+            const buildRes = process.env.BUILD_JOB_RESULT ?? '?';
+            const smokeRes = process.env.SMOKE_JOB_RESULT ?? '?';
+            const body = `### Auto QA (diff-scoped smoke)\n\nInspired by [Skyvern's agent QA loop](https://www.skyvern.com/blog/getting-claude-to-qa-its-own-work/) — this workflow classifies the PR diff and runs only the matching Playwright checks.\n\n| Field | Value |\n| --- | --- |\n| Classification | **${cls}** |\n| Docs-only | ${docs} |\n| Browser UI smoke | ${fe} |\n| /health smoke | ${be} |\n| Build job | ${buildRes} |\n| This smoke job | ${smokeRes} |\n`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const marker = '<!-- auto-qa-smoke -->';
+            const existing = comments.find((c) => c.body?.includes(marker));
+            const full = marker + '\n' + body;
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: full,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: full,
+              });
+            }
