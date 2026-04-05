@@ -77,6 +77,11 @@ const persistedSeats = loadPersistedSeats();
 
 // Express app
 const app = express();
+
+app.get("/health", (_req, res) => {
+  res.type("text/plain").send("ok");
+});
+
 // Serve production build
 app.use(express.static(join(__dirname, "public")));
 

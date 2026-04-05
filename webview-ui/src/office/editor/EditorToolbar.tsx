@@ -212,6 +212,7 @@ export function EditorToolbar({
 
   return (
     <div
+      data-testid="editor-toolbar"
       style={{
         position: 'absolute',
         bottom: 68,

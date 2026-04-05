@@ -13,6 +13,13 @@ sd-office/
 # Playwright MCP debug logs
 .playwright-mcp/
 
+# CI diff classification artifact (generated locally / in CI)
+qa-classification.json
+
+# Playwright output
+test-results/
+playwright-report/
+
 # Screenshots
 pixel-agents-current.png
 *.HEIC

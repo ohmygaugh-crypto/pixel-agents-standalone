@@ -147,6 +147,8 @@ export function BottomToolbar({
         )}
       </div>
       <button
+        type="button"
+        data-testid="toolbar-layout"
         onClick={onToggleEditMode}
         onMouseEnter={() => setHovered('edit')}
         onMouseLeave={() => setHovered(null)}

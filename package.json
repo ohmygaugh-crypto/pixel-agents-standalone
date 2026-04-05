@@ -12,7 +12,11 @@
     "build:ui": "cd webview-ui && npx vite build --outDir ../dist/public && cp -r public/assets ../dist/public/assets",
     "start": "node dist/server.js",
     "import-tileset": "tsx scripts/import-tileset.ts",
-    "extract-furniture": "tsx scripts/extract-furniture.ts"
+    "extract-furniture": "tsx scripts/extract-furniture.ts",
+    "qa:classify-diff": "tsx scripts/classify-diff.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:health": "playwright test tests/e2e/health.spec.ts",
+    "test:e2e:ui": "playwright test tests/e2e/app-smoke.spec.ts"
   },
   "dependencies": {
     "chokidar": "^4.0.0",
@@ -28,6 +32,7 @@
     "concurrently": "^9.0.0",
     "esbuild": "^0.27.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "@playwright/test": "^1.51.0"
   }
 }
