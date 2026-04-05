@@ -8,6 +8,7 @@ import { setFloorSprites } from '../office/floorTiles.js'
 import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
+import { isRealtimeEnabled } from '../wsApi.js'
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
 
 export interface SubagentCharacter {
@@ -357,6 +358,16 @@ export function useExtensionMessages(
     }
     window.addEventListener('message', handler)
     vscode.postMessage({ type: 'webviewReady' })
+
+    // Netlify/static production can run with no realtime backend.
+    // Bootstrap with the default local layout so App doesn't block on `layoutLoaded`.
+    if (!isRealtimeEnabled()) {
+      const os = getOfficeState()
+      onLayoutLoaded?.(os.getLayout())
+      layoutReadyRef.current = true
+      setLayoutReady(true)
+    }
+
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 

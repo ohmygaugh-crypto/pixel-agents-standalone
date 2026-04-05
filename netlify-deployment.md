@@ -18,7 +18,7 @@ corepack enable && cd webview-ui && pnpm install --frozen-lockfile && pnpm run b
 - Publish directory:
 
 ```bash
-webview-ui/../dist/public
+dist/public
 ```
 
 - Node version:
@@ -46,10 +46,10 @@ Examples:
 - Hosted realtime service:
   - `wss://your-realtime-host.example.com`
 
-If this variable is not set, the app falls back to:
+If this variable is not set, the app behavior is:
 
 - dev: `ws://localhost:3456`
-- prod: `wss://<current-host>` when served over HTTPS, else `ws://<current-host>`
+- prod: realtime is disabled; the app boots in local-only mode (no infinite loading screen)
 
 ## 5) Recommended Phase 1 realtime options
 
