@@ -1,26 +1,39 @@
 // WebSocket API — replaces VS Code postMessage bridge.
-// Allows portable host deployments (Netlify + external realtime) via env override.
-const WS_URL = resolveWsUrl();
+// Realtime is opt-in in production via VITE_REALTIME_WS_URL.
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-function resolveWsUrl(): string {
+function getConfiguredWsUrl(): string | null {
   const configured = import.meta.env.VITE_REALTIME_WS_URL as string | undefined;
-  if (configured) {
-    return configured;
-  }
+  const trimmed = configured?.trim();
+  return trimmed ? trimmed : null;
+}
 
+export function isRealtimeEnabled(): boolean {
+  return import.meta.env.DEV || Boolean(getConfiguredWsUrl());
+}
+
+function resolveWsUrl(): string {
+  const configured = getConfiguredWsUrl();
+  if (configured) return configured;
+
+  // Dev keeps the local backend default for the standalone workflow.
   if (import.meta.env.DEV) {
     return "ws://localhost:3456";
   }
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}`;
+  // Production only reaches here when explicitly configured.
+  return "ws://localhost:3456";
 }
 
 export function connectWebSocket(): void {
-  ws = new WebSocket(WS_URL);
+  if (!isRealtimeEnabled()) {
+    console.info("[Webview] Realtime disabled (no VITE_REALTIME_WS_URL in production); booting local-only mode.");
+    return;
+  }
+
+  ws = new WebSocket(resolveWsUrl());
 
   ws.onopen = () => {
     console.log("Connected to pixel-agents server");
@@ -50,4 +63,5 @@ export function sendMessage(msg: unknown): void {
 export function cleanup(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   ws?.close();
+  ws = null;
 }
